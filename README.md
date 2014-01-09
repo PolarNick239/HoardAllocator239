@@ -1,6 +1,6 @@
 HoardAllocator239
 =================
-This is an implimintation of Hoard: A Scalable Memory Allocator for Multithreaded Applications.
+This is an implementation of Hoard: A Scalable Memory Allocator for Multithreaded Applications.
 
 All ideas of this allocator were read from this article:
 http://people.cs.umass.edu/~emery/pubs/berger-asplos2000.pdf
@@ -11,12 +11,22 @@ The reason for this task was a course in SPb NRU ITMO, Computer Technologies Dep
 How to use:
 =================
 You can use make:
-* "make": will compile allocator
-* "make run": will run xterm with tracing all allocations
-* "make runWithoutTrace": will run gedit without tracing
+-----------------
+
+To compile allocator:
+ 
+    make
+
+To run xterm with tracing all allocations:
+    
+    make run
+
+To run gedit without tracing:
+
+    make runWithoutTrace
 
 How to compile and run:
-----------------
+-----------------------
 
 1) compile:
 
