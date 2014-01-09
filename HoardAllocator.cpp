@@ -118,6 +118,74 @@ namespace hoard {
     void* const MAGIC_BYTES_FOR_BLOCK = (void*) 0x239C0DE;
     void* const MAGIC_BYTES_FOR_FREE_BLOCK = (void*) 0x2391C0DE;
     void* const MAGIC_BYTES_FOR_SUPERBLOCK = (void*) 0xC0DE239;
+    
+    size_t SIZE_OF_SUPERBLOCK;
+    int COUNT_OF_CLASSSIZE;
+    size_t HEAPS_COUNT;
+    
+    Heap* commonHeap;
+    Heap* heaps;
+    
+    const size_t PRECALC_MAX_SIZE = 256;
+    size_t* roundedUpSizes;
+    size_t* classesForSizes;
+    
+    bool initialized;
+    Lockable initializationLock;
+    
+    size_t roundUpSize(size_t size) {
+        if (initialized && size < PRECALC_MAX_SIZE) {
+            return roundedUpSizes[size];
+        }
+        double curSize = BASE;
+        size_t classSize = 0;
+        while (curSize < size) {
+            curSize *= BASE;
+            classSize++;
+        }
+        return (size_t) curSize;
+    }
+    
+    size_t getClassSize(size_t size) {
+        if (initialized && size < PRECALC_MAX_SIZE) {
+            return classesForSizes[size];
+        }
+        double curSize = BASE;
+        size_t classSize = 0;
+        while (curSize < size) {
+            curSize *= BASE;
+            classSize++;
+        }
+        return classSize;
+    }
+    
+    void init() {
+        if (!initialized) {
+            initializationLock.lock();
+            if (!initialized) {
+                SIZE_OF_SUPERBLOCK = 4 * sysconf(_SC_PAGE_SIZE);
+                COUNT_OF_CLASSSIZE = getClassSize(SIZE_OF_SUPERBLOCK) + 1;
+                HEAPS_COUNT = 2 * MAX_THREAD_COUNT;
+                
+                heaps = (Heap*) mmap(NULL, sizeof(Heap) * (HEAPS_COUNT + 1), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                commonHeap = heaps + HEAPS_COUNT;
+                for (Heap* heap = heaps; heap < heaps + HEAPS_COUNT + 1; heap++) {
+                    new (heap) Heap();
+                }
+                
+                roundedUpSizes = (size_t*) mmap(NULL, sizeof(size_t) * PRECALC_MAX_SIZE * 2, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                classesForSizes = roundedUpSizes + PRECALC_MAX_SIZE;
+                
+                for(size_t size = 0; size < PRECALC_MAX_SIZE; size++) {
+                    roundedUpSizes[size] = roundUpSize(size);
+                    classesForSizes[size] = getClassSize(size);
+                }
+                
+                initialized = true;
+            }
+            initializationLock.unlock();
+        }
+    }
 
     size_t getThreadIdHash() {
         size_t tidHash =  std::hash<std::thread::id>()(std::this_thread::get_id());
@@ -153,56 +221,6 @@ namespace hoard {
         //This method belive, that linkToThis in SingleBlock and Block is a last
         //variable of void* type!
         *(void**)((char*) from - sizeof(void*)) = to;
-    }
-    
-    size_t roundUpSize(size_t size) {
-        double curSize = BASE;
-        size_t classSize = 0;
-        while (curSize < size) {
-            curSize *= BASE;
-            classSize++;
-        }
-        return (size_t) curSize;
-    }
-    
-    size_t getClassSize(size_t size) {
-        double curSize = BASE;
-        size_t classSize = 0;
-        while (curSize < size) {
-            curSize *= BASE;
-            classSize++;
-        }
-        return classSize;
-    }
-    
-    size_t SIZE_OF_SUPERBLOCK;
-    int COUNT_OF_CLASSSIZE;
-    size_t HEAPS_COUNT;
-    
-    Heap* commonHeap;
-    Heap* heaps;
-    
-    bool initialized;
-    Lockable initializationLock;
-    
-    void init() {
-        if (!initialized) {
-            initializationLock.lock();
-            if (!initialized) {
-                SIZE_OF_SUPERBLOCK = 4 * sysconf(_SC_PAGE_SIZE);
-                COUNT_OF_CLASSSIZE = getClassSize(SIZE_OF_SUPERBLOCK) + 1;
-                HEAPS_COUNT = 2 * MAX_THREAD_COUNT;
-                
-                heaps = (Heap*) mmap(NULL, sizeof(Heap) * (HEAPS_COUNT + 1), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-                commonHeap = heaps + HEAPS_COUNT;
-                for (Heap* heap = heaps; heap < heaps + HEAPS_COUNT + 1; heap++) {
-                    new (heap) Heap();
-                }
-                
-                initialized = true;
-            }
-            initializationLock.unlock();
-        }
     }
     
     SingleBlock::SingleBlock(size_t _sizeOfData, size_t _alignedSize)
