@@ -37,6 +37,7 @@ namespace hoard {
             }
         }
         write(2, message, pow);
+        munmap(message, pow);
     }
     
     void printMessage(void* pointer) {
